@@ -4,8 +4,11 @@ A python implementation of the CRAFT technique described in [Cooray et al. 2020]
 
 ### Usage
 
-Download the script to the working directly and use by `import craft`.
+Download the script to the working directly and use as a module by `import craft`.
 
 
 
 For any questions, please contact Suchetha Cooray at cooray{at}nagoya-u.jp
+
+### Reference
+Suchetha Cooray, Tsutomu T Takeuchi, Takuya Akahori, Yoshimitsu Miyashita, Shinsuke Ideguchi, Keitaro Takahashi, Kiyotomo Ichiki, *An Iterative Reconstruction Algorithm for Faraday Tomography, Monthly Notices of the Royal Astronomical Society*, , staa3580, <https://doi.org/10.1093/mnras/staa3580>
