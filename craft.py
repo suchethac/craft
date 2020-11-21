@@ -355,7 +355,7 @@ def reconstruct(ls, P_lambda_squared_observed, ls_obs_min, ls_obs_max,
         F_f_n = IFT_1D(ls, g_n)[1]
     #     phi2, F_f_n = IFT_1D(ls2, g_n)#[1]
 
-        F_phi_window_new[np.abs(F_f_n)<mu] = 0
+        F_phi_window[np.abs(F_f_n)<mu] = 0
         F_f_n = np.multiply(F_f_n, F_phi_window)
 
         abs_FDF = np.abs(F_f_n)
