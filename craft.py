@@ -1,19 +1,17 @@
 import numpy as np
-import scipy.fftpack as fft
 from scipy import constants
 from scipy import ndimage
 
 # To speed up the Fast Fourier Trasnforms, one can use 
 # FFTW implementation for python as shown below.
-
-# try:
-#     import pyfftw
-#     import multiprocessing
-#     pyfftw.config.NUM_THREADS = multiprocessing.cpu_count()
-#     pyfftw.interfaces.cache.enable()
-#     import pyfftw.interfaces.scipy_fftpack as fft
-# except:
-#     import scipy.fftpack as fft
+try:
+    import pyfftw
+    import multiprocessing
+    pyfftw.config.NUM_THREADS = multiprocessing.cpu_count()
+    pyfftw.interfaces.cache.enable()
+    import pyfftw.interfaces.scipy_fftpack as fft
+except:
+    import scipy.fftpack as fft
     
 
 ##### Unit Conversions #####
@@ -152,15 +150,18 @@ def chi_smoothing_scale(ls_min, ls_max):
 
 ##### Fourier transforms #####
 
+# FT P(lambda^2) -> F(phi)
+# IFT F(phi) -> P(lambda^2)
+
 def FT_1D(ls, P, axis=-1):
     """
-    Fourier transform the Faraday dispersion function F(phi) to 
-    obtain the complex linear polarization spectrum P(lambda^2).
-    The function uses the FFT to approximate the continuous Fourier 
-    transform of a discretely sampled function.
+    Fourier transform the complex linear polarization spectrum 
+    P(lambda^2) to obtain the Faraday dispersion function F(phi).
+    The function uses the FFT to approximate the continuous 
+    Fourier transform of a discretely sampled function.
     
-       F(phi) = integral[ P(ls) exp(-2*i*phi*ls) dls]
-       P(ls) = integral[ F(phi) exp(2*i*phi*ls) dphi]
+       FT: F(phi) = integral[ P(ls) exp(-2*i*phi*ls) dls]
+       IFT: P(ls) = integral[ F(phi) exp(2*i*phi*ls) dphi]
        
     Function returns phi and F, which approximate F(phi).
     
@@ -184,42 +185,39 @@ def FT_1D(ls, P, axis=-1):
     """
     assert ls.ndim == 1
     assert P.shape[axis] == ls.shape[0]
-    
-    N = len(ls)
+    N = int(len(ls))
     if N % 2 != 0:
-        raise ValueError("Number of samples must be even")     
-    
-    shape = np.ones(P.ndim, dtype=int)
-    shape[axis] = N
-    
+        raise ValueError("number of samples must be even")
+        
+    ls = ls/np.pi
     Dls = ls[1] - ls[0]
     Dphi = 1. / (N * Dls)
     ls0 = ls[int(N / 2)]
 
     phi = Dphi * (np.arange(N) - N / 2)
 
+    shape = np.ones(P.ndim, dtype=int)
+    shape[axis] = N
+
     phase = np.ones(N)
     phase[1::2] = -1
     phase = phase.reshape(shape)
 
-    F = Dls * fft.fft(P * phase, axis=axis)
+#     F = Dls * fft.fft(P * phase, axis=axis)
+    F = Dls * fft.fftshift(fft.fft(P, axis=axis), axes=axis) #*np.pi
+
     F *= phase
     F *= np.exp(-2j * np.pi * ls0 * phi.reshape(shape))
     F *= np.exp(-1j * np.pi * N / 2)
-    
-    phi*=np.pi
     
     return phi, F
 
 def IFT_1D(phi, F, axis=-1):
     """
-    Inverse Fourier transform the complex linear polarization spectrum 
-    P(lambda^2) to obtain the Faraday dispersion function F(phi).
-    The function uses the FFT to approximate the inverse continuous 
+    Inverse Fourier transform the Faraday dispersion function F(phi)
+    to obtain the complex linear polarization spectrum P(lambda^2).
+    The function uses the FFT to approximate the inverse continuous
     Fourier transform of a discretely sampled function.
-    
-       F(phi) = integral[ P(ls) exp(-2*i*phi*ls) dls]
-       P(ls) = integral[ F(phi) exp(2*i*phi*ls) dphi]
        
     Function returns ls and P, which approximate P(ls).
     
@@ -242,29 +240,31 @@ def IFT_1D(phi, F, axis=-1):
     P   : ndarray
         Complex linear polarization spectrum.
     """
+    
     assert phi.ndim == 1
     assert F.shape[axis] == phi.shape[0]
     
     N = len(phi)
     if N % 2 != 0:
         raise ValueError("Number of samples must be even")
-        
-    shape = np.ones(F.ndim, dtype=int)
-    shape[axis] = N
-    
-    phi = phi/np.pi
+
     phi0 = phi[0]
     Dphi = phi[1] - phi[0]
-    ls0 = -1. / 2*Dphi
+
+    ls0 = -0.5 / Dphi
     Dls = 1. / (N * Dphi)
     ls = ls0 + Dls * np.arange(N)
+    
+    shape = np.ones(F.ndim, dtype=int)
+    shape[axis] = N
 
     ls_calc = ls.reshape(shape)
     phi_calc = phi.reshape(shape)
 
     F_prime = F * np.exp(2j * np.pi * ls0 * phi_calc)
     P_prime = fft.ifft(F_prime, axis=axis)
-    P = N * Dphi * np.exp(2j * np.pi * phi0 * (ls_calc - ls0)) * P_prime
+    P = N * Dphi * np.exp(2j * np.pi * phi0 * (ls_calc - ls0)) * P_prime #/ np.pi
+    ls = ls*np.pi
 
     return ls, P
 
@@ -287,14 +287,14 @@ def normalized_residual(current, previous):
 
 
 def reconstruct(ls, P_lambda_squared_observed, ls_obs_min, ls_obs_max, 
-                mu=0.01, phi_max=500, rtol = 0.001, max_iter=1000):
+                mu=0.01, phi_max=500, rtol = 0.001, max_iter=1000, mode='P'):
     """
     Core of the CRAFT introduced in Cooray et al. 2020b. 
     
     Takes in the list of lambda squared sampling and the observed linear 
     polarization spectrum to return the reconstructed polarization 
-    spectrum. Input the observed spectrum with zero at unobserved lambda 
-    squared values. 
+    spectrum or the Faraday dispersion function. Input the observed spectrum 
+    with zero at unobserved lambda squared values. 
     
     Parameters
     ----------
@@ -320,40 +320,51 @@ def reconstruct(ls, P_lambda_squared_observed, ls_obs_min, ls_obs_max,
     max_iter : int (optional)
         The covergence criterion by relative tolerance.
         Default set to 1000
-    
+    mode : {'P', 'F'} (optional)
+        The format of the output. If 'P', the reconstructed linear
+        polarization spectrum is returned. If 'F' the reconstructed
+        Faraday dispersion function is returned.
+        Default set to 'P'
+        
     Returns
     -------
-    P_lambda_squared_reconstructed : ndarray
+    P_lambda_squared_reconstructed : ndarray (optional)
         Reconstructed complex linear polarization spectrum with same 
         lambda square sampling.
+    (phi_reconstructed, F_phi_reconstructed) : tuple (optional)
+        Reconstructed Faraday dispersion function with the calculated 
+        optimal Faraday depth sampling.
     
     """
+    ls_wind = np.ones(ls.size)
+    ls_wind[ls<ls_obs_min] = 0
+    ls_wind[ls>ls_obs_max] = 0
+    ls_mask = np.ones(P_lambda_squared_observed.size) - ls_wind
 
-    phi, F_phi_obs = IFT_1D(ls, P_lambda_squared_observed)
+    phi, F_phi_obs = FT_1D(ls, P_lambda_squared_observed)
     dphi = phi[1] - phi[0]
 
     g = P_lambda_squared_observed.copy()
     g_n = g
-    F_f_0 = IFT_1D(ls, g)[1]
+    F_f_0 = FT_1D(ls, g)[1]
     F_f_n = np.copy(F_f_0)
     
-    F_previous = np.ones(F_f_0.shape)
+    F_previous = np.ones(F_f_0.shape)*1j
     F_current = F_f_0
     
     recon_scale = chi_smoothing_scale(ls_obs_min, ls_obs_max)
 
     F_phi_window = np.ones(phi.shape)
-    F_phi_window[np.abs(phi)<phi_max] = 0
+    F_phi_window[np.abs(phi)>phi_max] = 0
 
     n=0
-#     ls2 = ls.copy()
+    ls2 = ls.copy()
     while normalized_residual(F_current, F_previous)>rtol and n<max_iter:
 
-        g_n = np.add(np.multiply(g_n,ls_mask),
-                     np.multiply(g,ls_wind))
-
-        F_f_n = IFT_1D(ls, g_n)[1]
-    #     phi2, F_f_n = IFT_1D(ls2, g_n)#[1]
+        g_n = g_n*ls_mask + g*ls_wind
+        
+#         F_f_n = FT_1D(ls, g_n)[1]
+        phi2, F_f_n = FT_1D(ls2, g_n)
 
         F_phi_window[np.abs(F_f_n)<mu] = 0
         F_f_n = np.multiply(F_f_n, F_phi_window)
@@ -369,20 +380,134 @@ def reconstruct(ls, P_lambda_squared_observed, ls_obs_min, ls_obs_max,
 
         F_f_n = abs_FDF*np.cos(chi) + 1j*abs_FDF*np.sin(chi)
 
-        g_n = FT_1D(phi, F_f_n)[1]
-    #     ls2, g_n = FT_1D(phi2, F_f_n)
+#         g_n = IFT_1D(phi, F_f_n)[1]
+        ls2, g_n = IFT_1D(phi2, F_f_n)
 
         F_previous = F_current.copy()
-        F_current = F_f_n
+        F_current = F_f_n.copy()
         n+=1
 
-    # print(n)
+    phi = phi2.copy()
+    print("Number of iterations till convergence was", n)
     
-    P_lambda_squared_reconstructed = FT_1D(phi, F_f_n)[1]
+    if mode=='F':
+        return phi, F_current
+    elif mode=='P':
+        return IFT_1D(phi, F_current)[1]
+    else:
+        print('mode set to default')
+        return IFT_1D(phi, F_current)[1]
     
-    return P_lambda_squared_reconstructed
+
+def reconstruct_F(ls, P_lambda_squared_observed, ls_obs_min, ls_obs_max, 
+                  mu=0.01, phi_max=500, rtol = 0.001, max_iter=1000, mode='F'):
+    """
+    Convienient function to return the reconstructed Faraday dispersion funtion.
+    The reconstruction is done with CRAFT introduced in Cooray et al. 2020b. 
+    
+    Takes in the list of lambda squared sampling and the observed linear 
+    polarization spectrum to return the reconstructed the Faraday dispersion 
+    function. Input the observed spectrum with zero at unobserved lambda squared 
+    values. 
+    
+    Parameters
+    ----------
+    ls  : ndarray
+        Regularly sampled array of lambda squared of the observed 
+        linear polarization spectrum.
+    P_lambda_squared_observed : ndarray
+        Observed complex linear polarization spectrum.
+    ls_obs_min : float
+        Lower limit of lamdba squared in the observed spectrum
+    ls_obs_max : float
+        Upper limit of lamdba squared in the observed spectrum
+    mu : float (optional)
+        Parameter of the nonlinear threshold operator S_mu. 
+        Default set to 0.01 
+    phi_max : positive float (optional)
+        Parameter to set the initial window in Faraday depth.
+        The parameter is the maximum absolute Faraday depth phi.
+        Default set to 500
+    rtol : float (optional)
+        The covergence criterion by relative tolerance.
+        Default set to 0.001
+    max_iter : int (optional)
+        The covergence criterion by relative tolerance.
+        Default set to 1000
+    mode : {'P', 'F'} (optional)
+        The format of the output. If 'P', the reconstructed linear
+        polarization spectrum is returned. If 'F' the reconstructed
+        Faraday dispersion function is returned.
+        Default set to 'P'
+        
+    Returns
+    -------
+    phi_reconstructed : ndarray
+        Calculated optimal Faraday depth sampling of F_phi_reconstructed 
+    F_phi_reconstructed : ndarray
+        Reconstructed Faraday dispersion function with the calculated 
+        optimal Faraday depth sampling.
+    
+    """
+    phi_recon, F_phi_recon = reconstruct(ls, P_lambda_squared_observed, 
+                                         ls_obs_min=ls_obs_min, 
+                                         ls_obs_max=ls_obs_max, mu=0.01, 
+                                         phi_max=500, rtol = 0.001, 
+                                         max_iter=1000, mode='F')
+    return phi_recon, F_phi_recon
+
+def reconstruct_P(ls, P_lambda_squared_observed, ls_obs_min, ls_obs_max, 
+                  mu=0.01, phi_max=500, rtol = 0.001, max_iter=1000, mode='P'):
+    """
+    Convienient function to return the reconstructed linear polarization spectrum.
+    The reconstruction is done with CRAFT introduced in Cooray et al. 2020b. 
+    
+    Takes in the list of lambda squared sampling and the observed linear 
+    polarization spectrum to return the reconstructed linear polarization 
+    spectrum with the same lambda squared sampling. Input the observed spectrum 
+    with zero at unobserved lambda squared values. 
+    
+    Parameters
+    ----------
+    ls  : ndarray
+        Regularly sampled array of lambda squared of the observed 
+        linear polarization spectrum.
+    P_lambda_squared_observed : ndarray
+        Observed complex linear polarization spectrum.
+    ls_obs_min : float
+        Lower limit of lamdba squared in the observed spectrum
+    ls_obs_max : float
+        Upper limit of lamdba squared in the observed spectrum
+    mu : float (optional)
+        Parameter of the nonlinear threshold operator S_mu. 
+        Default set to 0.01 
+    phi_max : positive float (optional)
+        Parameter to set the initial window in Faraday depth.
+        The parameter is the maximum absolute Faraday depth phi.
+        Default set to 500
+    rtol : float (optional)
+        The covergence criterion by relative tolerance.
+        Default set to 0.001
+    max_iter : int (optional)
+        The covergence criterion by relative tolerance.
+        Default set to 1000
+    mode : {'P', 'F'} (optional)
+        The format of the output. If 'P', the reconstructed linear
+        polarization spectrum is returned. If 'F' the reconstructed
+        Faraday dispersion function is returned.
+        Default set to 'P'
+        
+    Returns
+    -------
+    P_lambda_squared_reconstructed : ndarray
+        Reconstructed complex linear polarization spectrum with same 
+        lambda square sampling.
+    """
+    return reconstruct(ls, P_lambda_squared_observed, ls_obs_min=ls_obs_min, 
+                       ls_obs_max=ls_obs_max, mu=0.01, phi_max=500, rtol = 0.001, 
+                       max_iter=1000, mode='P')
+    
 
 ##############################
-
 
 
