@@ -11,4 +11,4 @@ For learning how to use this code, I have uploaded a demo python notebook. Addit
 If you have any questions, please contact Suchetha Cooray at cooray{at}nagoya-u.jp
 
 ### Reference
-Suchetha Cooray, Tsutomu T Takeuchi, Takuya Akahori, Yoshimitsu Miyashita, Shinsuke Ideguchi, Keitaro Takahashi, Kiyotomo Ichiki, *An Iterative Reconstruction Algorithm for Faraday Tomography, Monthly Notices of the Royal Astronomical Society*, , staa3580, <https://doi.org/10.1093/mnras/staa3580>
+Suchetha Cooray, Tsutomu T Takeuchi, Takuya Akahori, Yoshimitsu Miyashita, Shinsuke Ideguchi, Keitaro Takahashi, Kiyotomo Ichiki, *An Iterative Reconstruction Algorithm for Faraday Tomography, Monthly Notices of the Royal Astronomical Society*, Volume 500, Issue 4, February 2021, Pages 5129–5141, <https://doi.org/10.1093/mnras/staa3580>
