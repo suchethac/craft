@@ -15,7 +15,7 @@ from setuptools import find_packages, setup, Command
 NAME = 'craft-reconstruct'
 DESCRIPTION = 'An Iterative Reconstruction Algorithm for Faraday Tomography.'
 URL = 'https://github.com/suchethac/craft'
-EMAIL = 'cooray{at}nagoya-u.jp'
+EMAIL = 'cooray@nagoya-u.jp'
 AUTHOR = 'Suchetha Cooray'
 REQUIRES_PYTHON = '>=3.6.0'
 VERSION = '1.0.0'
