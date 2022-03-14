@@ -375,7 +375,7 @@ def reconstruct(ls, P_lambda_squared_observed, ls_obs_min, ls_obs_max,
         chi[F_phi_window==0] = 0
         abs_FDF[abs_FDF>mu] -= mu
 
-        chi = ndimage.gaussian_filter1d(chi, (recon_scale/2/0.1), 
+        chi = ndimage.gaussian_filter1d(chi, (recon_scale/(dphi*2)), 
                                         mode='constant', cval=0)
 
         F_f_n = abs_FDF*np.cos(chi) + 1j*abs_FDF*np.sin(chi)

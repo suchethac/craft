@@ -12,7 +12,7 @@ from shutil import rmtree
 from setuptools import find_packages, setup, Command
 
 # Package meta-data.
-NAME = 'craft'
+NAME = 'craft-reconstruct'
 DESCRIPTION = 'An Iterative Reconstruction Algorithm for Faraday Tomography.'
 URL = 'https://github.com/suchethac/craft'
 EMAIL = 'cooray{at}nagoya-u.jp'
