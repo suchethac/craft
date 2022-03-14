@@ -6,8 +6,13 @@ A python 3 implementation of the CRAFT technique described in [Cooray et al. 202
 
 Install using pip:
 ```
+pip install craft-reconstruct
+```
+Or from Github repo:
+```
 pip install git+https://github.com/suchethac/craft
 ```
+
 Or, clone this directory and install locally:
 ```
 git clone https://github.com/suchethac/craft
